@@ -126,13 +126,9 @@ class reaction():
         else:
             file_namer = lambda name: name.split('.')[0]
         
-        if 'spec_kwargs' in kwargs:
-            spec_kwargs = kwargs['spec_kwargs']
+        
             
-        else:
-            spec_kwargs = {'skiprows':1,'usecols':[0,1]} #skiprows = 1, usecols = [0,1]
-            
-        self.spectra = {file_namer(fn):spectrum(fn,name=file_namer(fn),kwargs=spec_kwargs) for fn in fl}
+        self.spectra = {file_namer(fn):spectrum(fn,name=file_namer(fn)) for fn in fl}
         return
     
     def make_x_axis(self,**kwargs):
@@ -196,34 +192,6 @@ class reaction():
 
         self.normfactors = [None]*len(self)
         return
-        
-        
-
-    #The following functions are depricated and are only kept for reference 
-    def _set_times(self, cycletime):
-        """takes dip-probe data collected over a series of cycles and converts cycle number into cycle start time in minutes"""
-        timelist = [n*cycletime for n in range(len(self.spectra))]
-        return np.array(timelist)
-    
-    def _set_dilutions(self, volume0):
-        '''returns dilutions in mL'''
-        try:
-            dils = np.loadtxt('./'+'dilutions.txt', delimiter = ',', skiprows = 1)
-            volumelist = [sum(dils[0:n+1]) for n in range(len(dils))]
-            return np.array(volumelist)/1000 + volume0
-        
-        except IOError:
-            print 'dilutions.txt does not exist in current working directory and a list of non-titrated volumes has been generated'
-            volumes = [volume0 for n in range(len(self.spectra))]
-            return np.array(volumes)
-        
-        except:
-            raise
-    
-    def _set_molarities(self, molarity0):
-        '''returns molarities in mM'''
-        return ((self.dilutions - self.volume0)*molarity0)*1000/self.dilutions
-    #End depricated Functions
     
     
     def find_minimum(self, window = None):

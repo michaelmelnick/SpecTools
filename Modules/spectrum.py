@@ -1,25 +1,21 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 from utilities import *
-from features import feature
+from features import *
 
 from scipy.optimize import curve_fit
 
 
 class spectrum:
     """
-    A spectrum is an x,y dataset with features which may be modeled as a set of gaussians.
-    A spectrum may not be initialized empty.
-
-    Currently Working:
-    1) CSV files may currently be read from files on disk
-    2) Peaks can be detected and modeled
-    3) Results can be cleanly displayed from the spectrum
-    4) Features are modeled in a modular manner
+    Spectrum holds an x,y dataset to model with a collection of features.
+    
+    
     
     """
-    def __init__(self, fn, window=None, Crunch=False, index_col=0, lineshape='gauss', name=None, kwargs={}):
+    def __init__(self, fn, window=None, lineshape='gauss', name=None, Crunch=False):
         """
         fn is a valid filepath pointing to a csv on disk.
         the CSV is assumed to be a two column matrix 
@@ -33,11 +29,8 @@ class spectrum:
         self.fix_list = []
         self.covariance = []
         
-        kwargs['index_col'] = index_col
-        if type(fn) == str:
-            self.data = pd.read_csv(fn, **kwargs)
-        else:
-            self.data = fn
+        self.header, self.data = simple_data_parser(fn)
+        
                     
         if name:
             self.name = name
@@ -45,16 +38,7 @@ class spectrum:
             self.name = fn.split('.')[0]
         
         self.lineshape=lineshape
-        
-        self.key = self.data.keys()[0]
-        self.define_axes()
         self.set_window(window)
-        
-        """
-        #create Shortcut for special values
-        for key in self.data.keys():
-            setattr(self,key,self.data[key])
-        """
         
         if Crunch:
             try:
@@ -62,7 +46,94 @@ class spectrum:
             except:
                 msg = "Didn't crunch {}".format(self.name)
                 print msg
+    
+    @property            
+    def x(self):
+        """
+        returns the x axis
+        """
+        return self.data[0][self.look]
+    
+    @property
+    def y(self):
+        """
+        Returns the measure y axis
+        """
+        return self.data[1][self.look]
+        
+    @property
+    def Rw(self):
+        """
+        Calculates Rw as estimate for goodness of fit.
+        """
+        y = self.y
+        ycalc = self()
+        Rw = np.sqrt(((y-ycalc)**2).sum()/(y**2).sum())
+        
+        return Rw
+    
+    @property
+    def dataspacing(self):
+        x = self.x
+        dataspacing = (x.max()-x.min())/len(x)
+        return dataspacing
+                
+    def __iter__(self):
+        return self.features.__iter__()
+    
+    def __getitem__(self, idx):
+        return self.features[idx]
+        
+    def __len__(self):
+        return len(self.features)
+    
+    def __repr__(self):
+        return self.name
+        
+    def __call__(self,x=None,*params):
+        """
+        Calling a spectrum returns the current y in the range
+        corresponding to x. Passing new params
+        changes the feature parameters.
+        """
+        
+        params = list(params)
+        
+        for n, bol in enumerate(self.fix_list):
+            if bol:
+                try:
+                    params.insert(n, self.fix_params[n])
+                except IndexError:
+                    params.append(self.fix_params[n]) 
+        
+        #How long should the parameter list be?    
+        param_count = 0
+        for feat in self.features:
+            param_count += len(feat)
+        
+        #check the parameter list
+        if not params:
+            params = self.get_all_params()
+        elif param_count != len(params):
+            errString = "Need {} parameters, got {}" .format(self.param_count, len(params))
+            raise ValueError(errString)
             
+        #make sure we have an x-axis
+        if x == None:
+            x = self.x
+        
+        #parses the param list and pass to features.
+        y = np.zeros_like(x)
+        n = 0
+        for feat in self.features:
+            num_vals = len(ptypes[feat.ptype])
+            t_params = params[n:n+num_vals]
+            
+            y += feat(x, *t_params)
+            n += num_vals
+            
+        return y    
+        
     def crunch_anypeaks(self,floor=0.1, lookahead=20, guesses = None):
         """
         Crunch finds peaks, fits them, sorts them and plots them. Guesses is a list of
@@ -87,27 +158,25 @@ class spectrum:
             self.find_peaks(lookahead=lookahead)
             self.define_features()
             
-        
-        self.fit_count = 0
         self.refine_fit(floor=floor) 
-        self.fit_count = 0
         self.sort_features()
         self.plot_all()
         
-    def crunch(self,floor=0.0001, numpeaks = 2, normfactor = None, window = None, lookahead = 20, guesses = None, extrapeaks = 0, fixed_peaks = {}, minimum = None, volume0 = None,loc=None):
-        """Crunch: Finds peaks, fits them, and sorts them. Guesses is a list of
-        peak positions or features to use as fit starting places. extrapeaks allows one to add an arbitrary number of extra peaks 
-        to the guesses if guesses is not a list of features. fixed_peaks is a dictionary of peaks that one fixes in place of the 
-        form {peak number:[pname]}"""
-        self.set_window(window)
+    def crunch(self,floor=0.01, numpeaks = 2, normfactor = None, window = None, 
+                lookahead = 20, guesses = None, extrapeaks = 0, fixed_peaks = {}, 
+                minimum = None,loc=None):
+        """
+        Crunch: Finds peaks, fits them, and sorts them. Guesses is a list of
+        peak positions or features to use as fit starting places. extrapeaks 
+        allows one to add an arbitrary number of extra peaks to the guesses if 
+        guesses is not a list of features. fixed_peaks is a dictionary of peaks 
+        that one fixes in place of the form {peak number:[pname]}
         
-        if volume0:
-            print "WARNING: Volume0 is depricated, use normfactor instead"
-            normfactor = volume0/self.volume
+        """
+        self.set_window(window)
         self.normalize_data(normfactor, minimum,loc)
         
         if guesses:
-        
             guesstype = type(guesses[0])
             if guesstype == int or guesstype == float:
                 self.peaks = self.guesses_to_peaks(guesses)
@@ -124,9 +193,7 @@ class spectrum:
             self.find_peaks(lookahead=lookahead)
             self.define_features()
 
-        self.fit_count = 0
-        self.refine_fit2(floor=floor, numpeaks=numpeaks, fix_dict = fixed_peaks) 
-        self.fit_count = 0
+        self.refine_fit2(floor=floor, numpeaks=numpeaks, fix_dict = fixed_peaks)
         self.sort_features()
         
     def normalize_data(self, normfactor=None, minimum=None,loc=None):
@@ -136,35 +203,33 @@ class spectrum:
         else:
             self.data_raw = self.data.copy()
         
+        x = self.data[0]
+        y = self.data[1]
+        
         if not minimum:
-            minimum = self.data[self.look].min()
+            minimum = y[self.look].min()
         if not normfactor:
-            normfactor = 1./(self.data[self.look].max() - minimum)
+            normfactor = 1./(y[self.look].max() - minimum)
         
         if loc:
-            x = np.array(self.data.index) #this is stupid
-            y = self.data[self.data.keys()[0]].values
             idx = np.argmin((x-loc)**2)
             maximum = y[idx]
             
             normfactor = 1./(maximum - minimum)
             
-            
-            
-            
-            
-        
-        self.data = (self.data-minimum)*normfactor
+        y -= minimum
+        y *= normfactor
     
-    def normalize_data2(self, volume0, minimum):
-        """For use with reaction class"""
-        print "WARNING: normalize_data2 is depricated, use normalize_data"
-        self.data_raw = self.data.copy()
-        if not minimum:
-            minimum = self.data[self.look].min()
-        self.data = (self.data-minimum)*volume0/self.volume
-
-    def refine_fit(self, floor=0.001):
+    
+    
+        
+        
+    def refine_fit(self,floor=0.01):
+        self.fit_count = 0
+        self._refine_fit(floor)
+    
+    
+    def _refine_fit(self, floor=0.01):
         """
         Refine Fit iterates the fit while removing any feature less than the
         variance or with amplitude less than zero
@@ -186,23 +251,14 @@ class spectrum:
             print 'Too many calls to refine_fit'
             return
             
-        variance = abs(self.data[self.look][self.key].var())
+        variance = self.y.var()
                 
         removable = []
         for feat in self.features:
-            amp = feat.get_param('Amplitude')
+            amp = feat['Amplitude']
             if amp < (variance*floor) or amp < 0.0:
-                print 'Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(feat.ptype, feat.get_param('Position'),amp,variance*floor)
+                print 'Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(feat.ptype, feat['Position'],amp,variance*floor)
                 removable.append(feat)
-        
-        #else:
-        #    if not removable and len(self.features) > numpeaks:
-        #        removable.append(min(self.features, key = lambda feat: feat['Width']*feat['Amplitude']*np.sqrt(2*np.pi)))
-        #        print 'removing smallest'
-        
-        #either remove features (and redo the fit)
-        #or add features (and redo the fit)
-        #or finish
         
         if removable:
             for kill in removable:
@@ -213,22 +269,31 @@ class spectrum:
                 except:
                     pass
             
-            self.refine_fit(floor)
+            self._refine_fit(floor)
         
         else:
-            diff = self.feature_model() - self.data[self.key][self.look].values    
-            if np.abs(diff.min()/variance) > floor:
+            diff = self() - self.y    
+            if np.abs(diff.min()) > floor*variance:
             #if len(self.features) < numpeaks:
                 
-                loc = self.data[self.look].index[diff.argmin()]
-                amp2 = self.data[self.look][self.key][loc]
+                loc = self.x[diff.argmin()]
+                amp2 = self.y[diff.argmin()]
+                width = self.dataspacing*10 #default peak width covers 10 points
+                
+                params = [amp2,width,loc]
             
                 print 'Adding a {} at {}'.format(self.lineshape, loc)
-                getattr(self, 'add_'+self.lineshape)(loc, amp2)
-                self.refine_fit(floor)
+                
+                self.add_feature(ptype=self.lineshape,params=params)
+                self._refine_fit(floor)
 
+    
+    def refine_fit2(self,floor=0.01,numpeaks=2,fix_dict = {}):
+        self.fit_count = 0
+        self._refine_fit2(floor=floor,numpeaks=numpeaks,fix_dict=fix_dict) 
         
-    def refine_fit2(self, floor=0.01, numpeaks = 2, fix_dict = {}):
+        
+    def _refine_fit2(self, floor=0.01, numpeaks = 2, fix_dict = {}):
         """Refine Fit produces a fit with number of features defined by numpeaks."""
     
         print "Fitting {}".format(self.name)
@@ -243,17 +308,19 @@ class spectrum:
         except:
             self.fit_count = 0
             
-        if self.fit_count > 20:
+        if self.fit_count > 10:
             print 'Too many calls to refine_fit'
             return
             
-        variance = abs(self.data[self.look][self.key].var())
+        variance = abs(self.y.var())
                 
         removable = []
         for feat in self.features:
-            amp = feat.get_param('Amplitude')
+            amp = feat['Amplitude']
             if amp < (variance*floor) or amp < 0.0:
-                print 'Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(feat.ptype, feat.get_param('Position'),amp,variance*floor)
+                print 'Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(
+                        feat.ptype, feat['Position'],amp,variance*floor)
+                        
                 removable.append(feat)
 
         else:
@@ -274,27 +341,23 @@ class spectrum:
                 except:
                     pass
     
-            self.refine_fit2(floor, numpeaks)
+            self._refine_fit2(floor=floor,numpeaks=numpeaks,fix_dict=fix_dict)
         
         else:
-            diff = self.feature_model() - self.data[self.key][self.look].values    
+            diff = self() - self.y
             #if np.abs(diff.min()/variance) > floor or len(self.features) < numpeaks:
             if len(self.features) < numpeaks:
             
-                loc = self.data[self.look].index[diff.argmin()]
-                amp2 = self.data[self.look][self.key][loc]
-        
+                loc = self.x[diff.argmin()]
+                amp2 = self.y[diff.argmin()]
+                width = self.dataspacing*10 #default peak width covers 10 points
+                
+                params = [amp2,width,loc]
+            
                 print 'Adding a {} at {}'.format(self.lineshape, loc)
-                getattr(self, 'add_'+self.lineshape)(loc, amp2)
-                self.refine_fit2(floor, numpeaks)          
-                            
-    def add_note(self, note):
-        """
-        Add a note about spectral conditions for use in meta-analysis.
-        Note must be a dictionary of notes.
-        """
-        for key in note:
-            setattr(self, key, note[key])
+                
+                self.add_feature(ptype=self.lineshape,params=params)
+                self._refine_fit2(floor=floor,numpeaks=numpeaks,fix_dict=fix_dict)         
     
     def set_window(self, window=None):
         """
@@ -303,7 +366,9 @@ class spectrum:
         if window:
             self.window = window
         else:
-            self.window = [self.data.index.values.min(), self.data.index.values.max()]    
+            if not hasattr(self,'window'):
+                x = self.data[0]
+                self.window = [x.min(), x.max()]    
         self.set_look()
     
     def set_look(self):
@@ -312,49 +377,72 @@ class spectrum:
         of the function to display or do math on.
         """
         if self.window:
-            self.look = (self.data.index >= min(self.window))*(self.data.index <= max(self.window))   
+            x = self.data[0]
+            self.look = (x >= min(self.window))*(x <= max(self.window))   
         else:
             self.set_window()
+            
     
-    def reset_data(self, fn, window=None, sep=','):
-        self.data = pd.reas_csv(fn,sep=sep, index_col=0)
-        self.define_axes()
-        self.set_window(window) 
-    
-    def define_axes(self):
+    def transform(self, xtransform=lambda x,y:x, ytransform=lambda x,y:y,xname=None,yname=None):
         """
-        Makes sure the x-axis is in eV and converts it if necessary
+        Transform allows for axis transformations.
+        
+        xtransform must be a function which transforms the x-axis, y must be a
+        function to transform the y axis. Defaults to doing nothing.
+        
+        If xname or yname is passed, changes the headers for labeling purposes.
+        Defaults to doing nothing.
         """
-        if self.data.index.name == 'nm':
-            #If x-axis is in nm, convert to eV
-            self.x_nm = np.array(self.data.index.tolist())
-            self.x_eV = hc/self.x_nm
-            self.data.index = self.x_eV
-            self.data.index.name = 'eV'
+        x = self.data[0]
+        y = self.data[1]
+        
+        x = xtransform(x,y)
+        y = ytransform(x,y)
+        
+        if xname:
+            self.header[0] = xname
             
-            #Apply Jacobian correction - not doing this!
-            #See dx.doi.org/10.1021/jz401508t
-            #self.data = self.data / (hc/(self.x_eV**2))   
+        if yname:
+            self.header[1] = yname
             
-        elif self.data.index.name == 'eV':
-            self.x_eV = np.array(self.data.index.tolist())
-            self.x_nm = hc/self.x_eV
+    def nm_to_eV(self,jacobian=True):
+        """
+        If the x-header is nm, coverts to eV. 
+        If jacobian is true, applies the jacobian correction.
+        """
+        
+        if self.header[0] == 'nm':
             
-        elif self.data.index.name == 'ppm':
-            self.x_ppm = np.array(self.data.index.tolist())
+            xtransform = lambda x,y:hc/x
+            
+            if jacobian:
+                ytransform = lambda x,y: y*(x**2)/hc
+                
+            self.transform(xtransform=xtransform,ytransform=ytransform,xname='eV')
             
         else:
-            raise TypeError("Malformed X-axis in raw data.")
+            print 'Warning, not in nm. No conversion applied. Use transform directly.'
             
-        self.values = self.data[self.key].values
-    
-    
-    def get_window(self):
-        return self.window
+    def eV_to_nm(self,jacobian=True):
+        """
+        If the x-header is eV, coverts to nm. 
+        If jacobian is true, applies the jacobian correction.
+        """
         
-    def get_look(self):
-        return self.look
+        if self.header[0] == 'eV':
+            
+            xtransform = lambda x,y:hc/x
+            
+            if jacobian:
+                ytransform = lambda x,y: y*(x**2)/hc
+                
+            self.transform(xtransform=xtransform,ytransform=ytransform,xname='nm')
+        
+        else:
+            print 'Warning, not in eV. No conversion applied. Use transform directly.'
                  
+    
+    
     def get_num_peaks(self):
         try:
             return self.num_peaks
@@ -375,10 +463,12 @@ class spectrum:
         for guess in guesses:
             peaks.append(xs[np.argmin(np.abs(xs - guess))])
         return np.array(peaks)
+               
+    
+    
         
-            
-        
-    #Finding the peaks   
+    #Finding the peaks
+    
     def find_peaks(self,mult=100,lookahead=20):
         self.smooth_data()
         self.take_derivatives()
@@ -386,20 +476,22 @@ class spectrum:
         self.num_peaks = len(self.peaks)
     
     def smooth_data(self, win=11, order=2):
-        self.smoothed = savitzky_golay(self.data[self.key][self.look].values, win, order)
+    
+        y = self.data[1]
+        self.smoothed = savitzky_golay(y[self.look], win, order)
     
     def take_derivatives(self, win = 11, order = 2):
         try:
-            self.d1 = savitzky_golay(self.data[self.key][self.look].values, win, order, deriv=1)
+            y = self.data[1]
+            self.d1 = savitzky_golay(y[self.look], win, order, deriv=1)
             self.d2 = savitzky_golay(self.d1, win, order, deriv=1)
         except:
             raise
     
     def peak_detect(self, mult=100, lookahead=20):
-        
-        xs = np.array(self.data.index.tolist())[self.look]
+    
         try:
-            results = peakdetect(self.d2, x_axis = xs,
+            results = peakdetect(self.d2, x_axis = self.x,
                                 lookahead=lookahead, delta = self.d2.var()*mult)
             
             self.peaks, self.peak_sig = np.array(zip(*results[1])[0]), np.array(zip(*results[1])[1])             
@@ -412,22 +504,8 @@ class spectrum:
                 self.find_peaks()
             else:
                 raise
-                
-        #questionable idea:
-        #throw out all peaks less than the variance of the signal.
-        #this might cause problems in some applications
         
-        #test = np.abs(self.data[self.key][self.peaks].values) > abs(self.data[self.look][self.key].var())
-        #self.peaks = self.peaks[test]
-        
-    def __iter__(self):
-        return self.features.__iter__()
     
-    def __getitem__(self, idx):
-        return self.features[idx]
-    
-    def __repr__(self):
-        return self.name
     
         
                 
@@ -442,11 +520,16 @@ class spectrum:
     
     """
     
-    def define_features(self,lineshape=None,width=0.02,add_bkgrnd=False):
+    
+    
+    
+    def define_features(self,lineshape=None,width=10,add_bkgrnd=False):
         """
         Clears the feature list, creates a new list of gaussian features at each
         peak found by the second derivative method. It then adds one extra peak
         at the high energy edge of the window to model a gaussian background.
+        
+        width is the number of datapoints covered by a peak guess
         """
         
         if lineshape:
@@ -454,83 +537,33 @@ class spectrum:
         else:
             lineshape = self.lineshape
         
-        self.features = []
+        self.clear_features()
         self.param_count = 0
         
         if not hasattr(self, 'peaks'):
             self.find_peaks()
         
+        
         for peak in self.peaks:
             
-            params = {  
-                        'loc': peak,
-                        'amp': self.data[self.key][peak],
-                        'width': width
-                     }
+            idx = ((self.x-peak)**2).argmin()
             
-            getattr(self,'add_'+lineshape)(**params)
-        
-        if add_bkgrnd:
-            self.add_bkgrnd_gauss(width)
+            params = [self.y[idx],self.dataspacing*width,peak]
+            
+            self.add_feature(ptype=lineshape,params=params)
     
+            
+    def add_feature(self,ptype,params,names=None,function=None):
+        feat = feature(function=function,ptype=ptype,params=params,names=names)
+        self.features.append(feat)
+        
     def define_featureslike(self, featlist):
         self.features = []
         for feat in featlist:
             self.features.append(feature(ptype = feat.ptype, params = feat.params))
-    
-    def add_gauss(self, loc, amp, width=0.02):
-        """
-        Add a gaussian to the feature list with location and amplitude given.
-        Width may be passed as a keyword argument. Default is 20 meV
-        """
-        params = [amp, width, loc]
-        ptype = 'gauss'
-        self.features.append(feature(ptype, params))
-        
-
-    def add_bkgrnd_gauss(self,width=0.02):
-        """
-        Adds a background gaussian at the highest energy end of the window.
-        The advantage of this method is that it carries the 'bkgrnd' label
-        for plotting and tabulating results.
-        """
-        
-        params = []
-        params.append(self.data[self.key][self.look][-1])
-        params.append(0.02)
-        params.append(self.data[self.look].index.values.max())
-        
-        self.features.append(feature(ptype='bkgrnd_gauss', params=params))
-    
-    def add_lorentz(self, loc, amp, width=0.2):
-        """
-        Add a lorentzian to the feature list with location and amplitude given.
-        Width may be passed as a keywork argument. Default is 0.2ppm
-        """
-        params = [amp, width, loc]
-        ptype = 'lorentz'
-        self.features.append(feature(ptype, params, names[ptype]))
-        
-    
-    def add_scatter(self, a):
-        """
-        Adds an y=a/x**4 dependent background feature. Might be useful in cases
-        with large ammounts of scattering.
-        """
-        
-        self.features.append(feature(ptype='scatter', params=[a]))
-        
-    def add_flat(self, a=0):
-        """
-        Adds a flat baseline with guess value 'a'
-        """
-        self.features.append(feature(ptype='flat', params=[a]))
-        
-    def add_line(self, m, b):
-        """
-        Adds a strait line with slope 'm' and intercept 'b'
-        """
-        self.features.append(feature(ptype='line', params=[m, b]))
+            
+    def clear_features(self):
+        self.features = []
         
     
     """
@@ -544,63 +577,15 @@ class spectrum:
         """
         params = []
         for feat in self.features:
-            for p in feat.params:
-                params.append(p)
+            for name in feat:
+                params.append(feat[name])
         return params
         
-    def feature_model(self, x=None, *params):
-        """
-        This generates a set of y values for a given set of x values using a list
-        of parameters passed. If params is None, uses the previously defined params.
-        
-        If x is passed empty, the x-parameters will be generated from the current
-        window.
-        
-        All params pased will change the values in the features. If used with
-        curve_fit the resulting feature parameters will be the last parameters
-        passed.
-        """
-        
-        params = list(params)
-        
-        for n, bol in enumerate(self.fix_list):
-            if bol:
-                try:
-                    params.insert(n, self.fix_params[n])
-                except IndexError:
-                    params.append(self.fix_params[n])     
-                    
-        #How long should the parameter list be?    
-        param_count = 0
-        for feat in self.features:
-            param_count += ptypes[feat.ptype]
-        
-        #check the parameter list
-        if not params:
-            params = self.get_all_params()
-        elif param_count != len(params):
-            errString = "Need {} parameters, got {}" .format(self.param_count, len(params))
-            raise ValueError(errString)
-            
-        #make sure we have an x-axis
-        if x == None:
-            x = np.array(self.data[self.look].index.tolist())
-        
-        #parses the param list and pass to features.
-        y = np.zeros_like(x)
-        n = 0
-        for feat in self.features:
-            num_vals = ptypes[feat.ptype]
-            t_params = params[n:n+num_vals]
-            
-            y += feat.model(x, params=t_params)
-            n += num_vals
-            
-        return y
+    
     
     def sort_features(self):
         if self.features:
-            self.features = sorted(self.features, key=lambda feat: feat.get_param('Position'))
+            self.features = sorted(self.features, key=lambda feat: feat['Position'])
     
     def feature_fitter(self, fix_dict={}, window=None):
         """
@@ -662,9 +647,9 @@ class spectrum:
                 params.pop(n)
         
         
-        x = np.array(self.data[self.look].index.tolist())
-        y = self.data[self.key][self.look].values
-        self.feat_fit, self.feat_covariance = curve_fit(self.feature_model, x, y, p0=params)
+        x = self.x
+        y = self.y
+        self.feat_fit, self.feat_covariance = curve_fit(self, x, y, p0=params)
         
         #clean up the fix list so other functions work
         self.fix_list = []
@@ -731,7 +716,7 @@ class spectrum:
         """
         
         if x == None:
-            x =np.array(self.data[self.look].index.tolist())
+            x = self.x
         if not ax:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -753,9 +738,9 @@ class spectrum:
             self.set_window([min(window), max(window)])
         
         if x == None:
-            x = np.array(self.data[self.look].index.tolist())
+            x = self.x
         
-        self.set_window([x.min(),x.max()])
+        #self.set_window([x.min(),x.max()])
         
         if not ax:
             fig = plt.figure()
@@ -766,7 +751,7 @@ class spectrum:
             kwargs['label'] = self.name
             kill_label = True
         
-        y = self.data[self.key][self.look].values + offset
+        y = self.y + offset
         ax.plot(x,y,**kwargs)
         self.set_window(tempwindow)
         
@@ -782,7 +767,7 @@ class spectrum:
         Kwargs must be a dictionary of legal matplotlib keywords
         """
         if x == None:
-            x = np.array(self.data[self.look].index.tolist())
+            x = self.x
         if not ax:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -792,7 +777,7 @@ class spectrum:
             kwargs['label'] = 'Fit'
             kill_label = True
             
-        y = self.feature_model(x) + offset
+        y = self(x) + offset
 
         ax.plot(x,y,**kwargs)
         
@@ -808,7 +793,7 @@ class spectrum:
         Kwargs must be a dictionary of legal matplotlib keywords
         """
         if x == None:
-            x =np.array(self.data[self.look].index.tolist())
+            x = self.x
         if not ax:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -819,12 +804,12 @@ class spectrum:
             kill_label = True
         
 
-        y = self.feature_model(x) + offset
+        y = self(x) + offset
 
         window = self.window
         self.set_window([x.min(),x.max()])
         
-        y -= self.data[self.key][self.look].values
+        y -= self.y
         ax.plot(x,y,**kwargs)
         plt.locator_params(axis = 'y', nbins = 4)
         self.set_window(window)
@@ -851,9 +836,9 @@ class spectrum:
         leg=ax1.legend(loc='best',fontsize='small')
         leg.get_frame().set_alpha(0.25)
         ax1.set_title(self.name)
-        ax1.set_ylabel(self.key)
+        ax1.set_ylabel(self.header[1])
         ax2.set_ylabel('diff')
-        ax2.set_xlabel(self.data.index.name)
+        ax2.set_xlabel(self.header[0])
         
         for ax in (ax1, ax2):
             ax.set_xlim(min(self.window),max(self.window))

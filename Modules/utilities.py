@@ -215,3 +215,47 @@ def binomial_row(rownum):
         val = val*(rownum-row)*1/(row+1)
         out.append(val)
     return out
+    
+def simple_data_parser(fp):
+    """
+    The simple data parser attempts to read a two-column ascii data file. This
+    assumes that the data is a set of numbers and are immediately preceeded by
+    a header.
+    
+    The parser walks down the file until it finds the first line that begins
+    with a number. It then tries various delmiter characters until then line
+    is broken into two or more non null strings. It then reads the line above 
+    the first data line for the header and opens the rest of the file using 
+    numpy.
+    """
+    
+    seps = [',',';','\t',' '] #add delimiter characters here.
+    sep = ''
+    delimiter = ''
+    with open(fp) as tmpFile:
+        for n, line in enumerate(tmpFile):
+            if line[0] in '0123456789':
+                skiprows = n
+                for sep in seps:
+                    broken = [c for c in line.split(sep) if c != '']
+                    if len(broken) > 1:
+                        delimiter = sep
+                        break
+                else:
+                    msg = 'Cannot parse dataline:\nline {}:\t{}'.format(n,line)
+                    raise LookupError(msg)
+            if sep:
+                break
+            
+            lastline = line
+        else:
+            msg = 'No linese found with numeric data'
+            raise LookupError(msg)
+     
+    headers = [c.strip() for c in lastline.split(delimiter) if c != '']
+        
+    data = np.loadtxt(fp, skiprows=skiprows,delimiter=delimiter,unpack=True)
+        
+    return headers, data
+
+    
