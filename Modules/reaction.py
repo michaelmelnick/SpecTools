@@ -81,6 +81,8 @@ class reaction():
         
         if 'window' in kwargs:
             self.window = kwargs['window']
+        else:
+            self.window = (np.inf,-np.inf)
             
         #load data
         self.directory = directory
@@ -130,53 +132,55 @@ class reaction():
             
         self.spectra = {file_namer(fn):spectrum(fn,name=file_namer(fn)) for fn in fl}
         return
+        
+    def set_windows(self,window=None):
+        if window:
+            self.window = window
+        else:
+            window = self.window
+        
+        for key in self:
+            self[key].set_window(window)
+            
     
-    def make_x_axis(self,**kwargs):
+    def make_x_axis(self,x_name=None,x_method=None, **kwargs):
         #make x_axis
         self.__x_methods = [    
                             'x_values',
                             'x_function',
                             'x_file'
-                        ]
+                            ]
+                        
         
         #Name the spectral axis
-        if 'x_name' in kwargs:
-            self.x_name = kwargs['x_name']
+        if 'x_name':
+            self.x_name = x_name
         else:
             self.x_name = 'Number'
-            
-        num_methods = sum([e in kwargs for e in self.__x_methods])
         
-        if num_methods == 1:
             #
-            if 'x_values' in kwargs:
-                self.x_values = np.array(kwargs['x_values'])
+        if 'x_values' == x_method or 'x_values' in kwargs:
+            self.x_values = np.array(kwargs['x_values'])
+            
+        elif 'x_function' == x_method:
+            func = kwargs['x_function']
+            if 'x_func_kwargs' in kwargs:
+                fkwargs = kwargs['x_func_kwargs']
+                self.x_values = func(len(self),**fkwargs)
+            else:
+                self.x_values = np.array(func(len(self)))
+        
+        elif 'x_file' == x_method:
+            fn = kwargs['x_file']
+            if 'x_reading_kwargs' in kwargs:
+                rkwargs = kwargs['x_reading_kwargs']
+                self.x_values = np.loadtxt(fn, **rkwargs)
+            else:
+                self.x_values = np.loadtxt(fn)
                 
-            if 'x_function' in kwargs:
-                func = kwargs['x_function']
-                if 'x_func_kwargs' in kwargs:
-                    fkwargs = kwargs['x_func_kwargs']
-                    self.x_values = func(len(self),**fkwargs)
-                else:
-                    self.x_values = np.array(func(len(self)))
-            
-            if 'x_file' in kwargs:
-                fn = kwargs['x_file']
-                if 'x_reading_kwargs' in kwargs:
-                    rkwargs = kwargs['x_reading_kwargs']
-                    self.x_values = np.loadtxt(fn, **rkwargs)
-                else:
-                    self.x_values = np.loadtxt(fn)
-                    
-        elif num_methods > 1:
-            print "Warning: multiple reaction axis definitions, defaulting to number axis"
-            self.x_values = np.arange(1,len(self)+1)
-            
-        elif num_methods == 0:
-            self.x_values = np.arange(1,len(self)+1)
-            
         else:
-            raise ValueError('Math is broken') #This really shouldn't be possible.
+            self.x_values = np.arange(1,len(self)+1)
+            
         
         if len(self) != len(self.x_values):
             print "Warning: reaction x_values are wrong length, defaulting to number axis"
@@ -196,9 +200,10 @@ class reaction():
     
     def find_minimum(self, window = None):
         self.minimum = np.Infinity
+        if window:
+            self.set_windows(window)
         for key in self:
             spec = self[key]
-            spec.set_window(window)
             if min(spec.values[spec.look]) < self.minimum:
                 self.minimum = min(spec.values[spec.look])
         
@@ -482,8 +487,10 @@ class reaction():
         """returns individual plots of a subset of spectra in a given reaction"""
         if not subset:
             subset = [0, len(self.spectra)]
-               
-        if not window:
+        
+        if window:
+            self.set_windows(window)
+        else:
             window = self.window
         
         figs = []
@@ -505,7 +512,9 @@ class reaction():
         if not subset:
             subset = [0, len(self.spectra)]
         
-        if not window:
+        if window:
+            self.set_windows(window)
+        else:
             window = self.window
         
         fig = plt.figure()

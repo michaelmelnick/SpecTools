@@ -10,7 +10,7 @@ from inspect import getargspec
 
 
 def _gauss(x,A,sigma,x0):
-    return A*np.exp(-(x-x0)**2/((2.*sigma)**2))
+    return A*np.exp(-(x-x0)**2/((2.*sigma**2)))
             
 def _lorentz(x,A,gamma,x0):
     return A*(gamma**2)/((x-x0)**2 + gamma**2)
@@ -182,7 +182,7 @@ class feature:
     def __repr__(self):
         rep = self.ptype
         for name in self:
-            rep+=' '+str(name)+' '+str(self[name])
+            rep+=' | '+str(name)[0:3]+': '+'%s' % float('%.4g' % self[name])
         return str(rep)
         
     def __iter__(self):

@@ -38,6 +38,7 @@ class spectrum:
             self.name = fn.split('.')[0]
         
         self.lineshape=lineshape
+        self.look = np.array([True]*len(self.data[0]),dtype=bool)
         self.set_window(window)
         
         if Crunch:
@@ -203,8 +204,8 @@ class spectrum:
         else:
             self.data_raw = self.data.copy()
         
-        x = self.data[0]
-        y = self.data[1]
+        x = self.x
+        y = self.y
         
         if not minimum:
             minimum = y[self.look].min()
@@ -367,7 +368,7 @@ class spectrum:
             self.window = window
         else:
             if not hasattr(self,'window'):
-                x = self.data[0]
+                x = self.x
                 self.window = [x.min(), x.max()]    
         self.set_look()
     
@@ -377,7 +378,7 @@ class spectrum:
         of the function to display or do math on.
         """
         if self.window:
-            x = self.data[0]
+            x = self.x
             self.look = (x >= min(self.window))*(x <= max(self.window))   
         else:
             self.set_window()
@@ -393,11 +394,16 @@ class spectrum:
         If xname or yname is passed, changes the headers for labeling purposes.
         Defaults to doing nothing.
         """
-        x = self.data[0]
-        y = self.data[1]
         
-        x = xtransform(x,y)
-        y = ytransform(x,y)
+        x = self.x.copy()
+        y = self.y.copy()
+        
+        self.x = xtransform(x,y)
+        self.y = ytransform(x,y)
+        
+        window_min = xtransform(min(self.window),1)
+        window_max = xtransform(max(self.window),1)
+        self.set_window((window_min,window_max))
         
         if xname:
             self.header[0] = xname
@@ -416,7 +422,9 @@ class spectrum:
             xtransform = lambda x,y:hc/x
             
             if jacobian:
-                ytransform = lambda x,y: y*(x**2)/hc
+                ytransform = lambda x,y: (y*(x**2))/hc
+            else:
+                ytransform = lambda x,y: y
                 
             self.transform(xtransform=xtransform,ytransform=ytransform,xname='eV')
             
@@ -435,6 +443,8 @@ class spectrum:
             
             if jacobian:
                 ytransform = lambda x,y: y*(x**2)/hc
+            else:
+                ytransform = lambda x,y: y
                 
             self.transform(xtransform=xtransform,ytransform=ytransform,xname='nm')
         
@@ -477,12 +487,12 @@ class spectrum:
     
     def smooth_data(self, win=11, order=2):
     
-        y = self.data[1]
+        y = self.y
         self.smoothed = savitzky_golay(y[self.look], win, order)
     
     def take_derivatives(self, win = 11, order = 2):
         try:
-            y = self.data[1]
+            y = self.y
             self.d1 = savitzky_golay(y[self.look], win, order, deriv=1)
             self.d2 = savitzky_golay(self.d1, win, order, deriv=1)
         except:
