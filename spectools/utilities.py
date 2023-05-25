@@ -276,7 +276,7 @@ def nm_to_eV(spectrum,jacobian=True):
         spectrum.transform(xtransform=xtransform,ytransform=ytransform,xname='eV')
         
     else:
-        print 'Warning, not in nm. No conversion applied. Use transform directly.'
+        print('Warning, not in nm. No conversion applied. Use transform directly.')
         
 def eV_to_nm(spectrum,jacobian=True):
     """
@@ -296,6 +296,6 @@ def eV_to_nm(spectrum,jacobian=True):
         spectrum.transform(xtransform=xtransform,ytransform=ytransform,xname='nm')
     
     else:
-        print 'Warning, not in eV. No conversion applied. Use transform directly.'
+        print('Warning, not in eV. No conversion applied. Use transform directly.')
 
     
