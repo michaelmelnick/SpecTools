@@ -53,7 +53,7 @@ class Spectrum:
                 self.crunch()
             except:
                 msg = "Didn't crunch {}".format(self.name)
-                print msg
+                print(msg)
     
     @property            
     def x(self):
@@ -171,8 +171,8 @@ class Spectrum:
         self.set_look()
         
         if len(self.x) == 0:
-            print "Warning, no x data in window: {}".format(self.window)
-            print "Defaulting to full window"
+            print("Warning, no x data in window: {}".format(self.window))
+            print("Defaulting to full window")
             x = self.data[0]
             self.set_window([x.min(), x.max()])
     
@@ -330,7 +330,7 @@ class Spectrum:
         variance or with amplitude less than zero
         """
         
-        print "Fitting {}".format(self.name)
+        print("Fitting {}".format(self.name))
         
         try:
             self.Feature_fitter()
@@ -343,7 +343,7 @@ class Spectrum:
             self.fit_count = 0
             
         if self.fit_count > 10:
-            print 'Too many calls to refine_fit'
+            print('Too many calls to refine_fit')
             return
             
         variance = self.y.var()
@@ -352,7 +352,7 @@ class Spectrum:
         for feat in self.Features:
             amp = feat['Amplitude']
             if amp < (variance*floor) or amp < 0.0:
-                print 'Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(feat.ptype, feat['Position'],amp,variance*floor)
+                print('Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(feat.ptype, feat['Position'],amp,variance*floor))
                 removable.append(feat)
         
         if removable:
@@ -360,7 +360,7 @@ class Spectrum:
                 try:
                     i = self.Features.index(kill)
                     self.Features.pop(i)
-                    print 'Removing a Feature'
+                    print('Removing a Feature')
                 except:
                     pass
             
@@ -377,7 +377,7 @@ class Spectrum:
                 
                 params = [amp2,width,loc]
             
-                print 'Adding a {} at {}'.format(self.lineshape, loc)
+                print('Adding a {} at {}'.format(self.lineshape, loc))
                 
                 self.add_Feature(ptype=self.lineshape,params=params)
                 self._refine_fit(floor)
@@ -391,7 +391,7 @@ class Spectrum:
     def _refine_fit2(self, floor=0.01, numpeaks = 2, fix_dict = {}):
         """Refine Fit produces a fit with number of Features defined by numpeaks."""
     
-        print "Fitting {}".format(self.name)
+        print("Fitting {}".format(self.name))
 
         try:
             self.Feature_fitter(fix_dict = fix_dict)
@@ -404,7 +404,7 @@ class Spectrum:
             self.fit_count = 0
             
         if self.fit_count > 10:
-            print 'Too many calls to refine_fit'
+            print('Too many calls to refine_fit')
             return
             
         variance = abs(self.y.var())
@@ -413,15 +413,15 @@ class Spectrum:
         for feat in self.Features:
             amp = feat['Amplitude']
             if amp < (variance*floor) or amp < 0.0:
-                print 'Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(
-                        feat.ptype, feat['Position'],amp,variance*floor)
+                print('Removing a {} at {} for amplitude \'{}\' against value \'{}\''.format(
+                        feat.ptype, feat['Position'],amp,variance*floor))
                         
                 removable.append(feat)
 
         else:
             if not removable and len(self.Features) > numpeaks:
                 removable.append(min(self.Features, key = lambda feat: feat['Width']*feat['Amplitude']*np.sqrt(2*np.pi)))
-                print 'removing smallest'
+                print('removing smallest')
 
         #either remove Features (and redo the fit)
         #or add Features (and redo the fit)
@@ -432,7 +432,7 @@ class Spectrum:
                 try:
                     i = self.Features.index(kill)
                     self.Features.pop(i)
-                    print 'Removing a Feature'
+                    print('Removing a Feature')
                 except:
                     pass
     
@@ -449,7 +449,7 @@ class Spectrum:
                 
                 params = [amp2,width,loc]
             
-                print 'Adding a {} at {}'.format(self.lineshape, loc)
+                print('Adding a {} at {}'.format(self.lineshape, loc))
                 
                 self.add_Feature(ptype=self.lineshape,params=params)
                 self._refine_fit2(floor=floor,numpeaks=numpeaks,fix_dict=fix_dict)         
@@ -647,7 +647,7 @@ class Spectrum:
             cov = self.feat_covariance.diagonal()
         except:
             msg = 'covariance undefined'
-            print msg
+            print(msg)
             return
         
         for feat in self.Features:
