@@ -183,7 +183,7 @@ class reaction():
             
         
         if len(self) != len(self.x_values):
-            print "Warning: reaction x_values are wrong length, defaulting to number axis"
+            print("Warning: reaction x_values are wrong length, defaulting to number axis")
             self.x_values = np.arange(1,len(self)+1)
             
         return
@@ -306,7 +306,7 @@ class reaction():
                 elif 'Width' in key:
                     yaxlab = 'Width (eV)'
                 else:
-                    print 'Err, keys are broken.'
+                    print('Err, keys are broken.')
                 figs.append(plt.figure())
                 plt.plot(xs, ys, 'bo', label = key)
                 axes.append(plt.gca())
@@ -318,7 +318,7 @@ class reaction():
                     figs[-1].savefig(self.directory.split('/')[-1]+ ' ' + key + '.png')
             return figs, axes
         else:
-            print 'This reaction has not yet been fitted or something else is wrong.'
+            print('This reaction has not yet been fitted or something else is wrong.')
     
         
     def plot_fitresultssbs(self, export = False, map_name = 'winter', feat_list = None):
@@ -366,7 +366,7 @@ class reaction():
                     elif 'Position' in key:
                         yaxlab = 'Position (eV)'
                     else:
-                        print 'Err, keys are broken.'
+                        print('Err, keys are broken.')
                     
                     ax.set_ylabel(yaxlab)
                     ax.set_xlabel(results.index.name)
@@ -395,7 +395,7 @@ class reaction():
             return fig
         
         else:
-            print 'This reaction has not yet been fitted or something else is wrong.'
+            print('This reaction has not yet been fitted or something else is wrong.')
 
 
     def plot_fitresultscollapsed(self, export = False, map_list = None, feat_list = None):
@@ -460,7 +460,7 @@ class reaction():
                 elif 'Position' in key:
                     yaxlab = 'Position (eV)'
                 else:
-                    print 'Err, keys are broken.'
+                    print('Err, keys are broken.')
                 
                 ax.set_ylabel(yaxlab)
                 ax.set_xlabel(results.index.name)
@@ -480,7 +480,7 @@ class reaction():
             return fig
         
         else:
-            print 'This reaction has not yet been fitted or something else is wrong.'
+            print('This reaction has not yet been fitted or something else is wrong.')
 
 
     def plot_spectra(self, subset = None, x = None, window = None):
@@ -551,7 +551,7 @@ class reaction():
                 axes.append(plt.gca())
             return figs, axes
         else:
-            print 'This reaction has not yet been fitted or something else is wrong.'
+            print('This reaction has not yet been fitted or something else is wrong.')
     
     def plot_spectrafitssbs(self, x=None, offset = 0., subset = None, map_name = 'winter', export = False, kwargs = {}):
         """returns plots of a subset of fitted spectra in a given reaction in a single figure"""
@@ -605,7 +605,7 @@ class reaction():
             fig.set_size_inches(7,5)
             return fig
         else:
-            print 'This reaction has not yet been fitted or something else is wrong.'
+            print('This reaction has not yet been fitted or something else is wrong.')
         #fig.set_size_inches(8,10.5) 
         #fig.tight_layout()
         
