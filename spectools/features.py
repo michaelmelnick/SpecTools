@@ -318,7 +318,7 @@ class Feature:
         if self.ptype in ptypes:
             self.names = names[self.ptype]
         else:
-            print 'Warning: Names Not Defined for {}'.format(self.ptype)
+            print('Warning: Names Not Defined for {}'.format(self.ptype))
             
     def keys(self):
         return [name for name in self]
